@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Chiffon {
+  id            String       @id @default(cuid())
+  title         String
+  titleAm       String       @default("")
+  description   String
+  descriptionAm String       @default("")
+  images        String
+  ownerPhone    String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  submissions   Submission[]
+
+  @@index([createdAt])
+}
+
+model Submission {
+  id          String      @id @default(cuid())
+  chiffonId   String
+  chiffon     Chiffon     @relation(fields: [chiffonId], references: [id], onDelete: Cascade)
+  floor       String
+  roomNumber  String
+  value       String
+  packageType PackageType
+  createdAt   DateTime    @default(now())
+
+  @@index([chiffonId])
+  @@index([createdAt])
+}
+
+enum PackageType {
+  TAQA
+  SIRY
+  METER
+}
