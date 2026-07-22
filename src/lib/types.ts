@@ -9,6 +9,7 @@ export type PublicChiffon = {
 };
 
 export type AdminChiffon = PublicChiffon & {
+  ownerName: string;
   ownerPhone: string;
   submissions: AdminSubmission[];
 };

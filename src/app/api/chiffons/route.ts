@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { title, titleAm, description, descriptionAm, images, ownerPhone } =
+    const { title, titleAm, description, descriptionAm, images, ownerName, ownerPhone } =
       body;
 
     if (
@@ -30,12 +30,13 @@ export async function POST(request: Request) {
       !titleAm?.trim() ||
       !description?.trim() ||
       !descriptionAm?.trim() ||
+      !ownerName?.trim() ||
       !ownerPhone?.trim()
     ) {
       return NextResponse.json(
         {
           error:
-            "Title, Amharic title, description, Amharic description, and owner phone are required",
+            "Title, Amharic title, description, Amharic description, owner name, and owner phone are required",
         },
         { status: 400 },
       );
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
         description: description.trim(),
         descriptionAm: descriptionAm.trim(),
         images: JSON.stringify(images),
+        ownerName: ownerName.trim(),
         ownerPhone: ownerPhone.trim(),
       },
     });
@@ -62,8 +64,9 @@ export async function POST(request: Request) {
     return NextResponse.json(toPublicChiffon(chiffon), { status: 201 });
   } catch (error) {
     console.error("POST /api/chiffons failed:", error);
+    const msg = error instanceof Error ? error.message : "Failed to create chiffon. Please try again.";
     return NextResponse.json(
-      { error: "Failed to create chiffon. Please try again." },
+      { error: msg },
       { status: 500 },
     );
   }

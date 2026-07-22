@@ -33,18 +33,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { chiffonId, floor, roomNumber, value, packageType } = body;
+  const { chiffonId, floor, roomNumber, items, value, packageType } = body;
 
-  if (!chiffonId || !floor?.trim() || !roomNumber?.trim() || !value?.trim()) {
+  if (!chiffonId || !floor?.trim() || !roomNumber?.trim()) {
     return NextResponse.json(
-      { error: "All fields are required" },
-      { status: 400 }
-    );
-  }
-
-  if (!["TAQA", "SIRY", "METER"].includes(packageType)) {
-    return NextResponse.json(
-      { error: "Invalid package type" },
+      { error: "Floor and Room number are required" },
       { status: 400 }
     );
   }
@@ -52,6 +45,41 @@ export async function POST(request: Request) {
   const chiffon = await prisma.chiffon.findUnique({ where: { id: chiffonId } });
   if (!chiffon) {
     return NextResponse.json({ error: "Chiffon not found" }, { status: 404 });
+  }
+
+  // Handle multi-item array
+  if (Array.isArray(items) && items.length > 0) {
+    for (const item of items) {
+      if (!item.value?.trim() || !["TAQA", "SIRY", "METER"].includes(item.packageType)) {
+        return NextResponse.json(
+          { error: "Each selected package requires a valid value" },
+          { status: 400 }
+        );
+      }
+    }
+
+    await prisma.submission.createMany({
+      data: items.map((item: { packageType: "TAQA" | "SIRY" | "METER"; value: string }) => ({
+        chiffonId,
+        floor: floor.trim(),
+        roomNumber: roomNumber.trim(),
+        value: item.value.trim(),
+        packageType: item.packageType,
+      })),
+    });
+
+    return NextResponse.json(
+      { message: "Your information has been submitted to the admin." },
+      { status: 201 }
+    );
+  }
+
+  // Backward compatibility for single submission
+  if (!value?.trim() || !["TAQA", "SIRY", "METER"].includes(packageType)) {
+    return NextResponse.json(
+      { error: "Package type and value are required" },
+      { status: 400 }
+    );
   }
 
   const submission = await prisma.submission.create({

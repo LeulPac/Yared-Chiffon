@@ -9,6 +9,7 @@ type ChiffonFormData = {
   titleAm: string;
   description: string;
   descriptionAm: string;
+  ownerName?: string;
   ownerPhone: string;
   images: string[];
 };
@@ -30,6 +31,7 @@ export default function AdminChiffonForm({
   const [descriptionAm, setDescriptionAm] = useState(
     initialData?.descriptionAm ?? "",
   );
+  const [ownerName, setOwnerName] = useState(initialData?.ownerName ?? "");
   const [ownerPhone, setOwnerPhone] = useState(initialData?.ownerPhone ?? "");
   const [images, setImages] = useState<string[]>(initialData?.images ?? []);
   const [uploading, setUploading] = useState(false);
@@ -43,7 +45,8 @@ export default function AdminChiffonForm({
     setTitleAm("");
     setDescription("");
     setDescriptionAm("");
-    setOwnerPhone("");
+    if (!initialData?.ownerName) setOwnerName("");
+    if (!initialData?.ownerPhone) setOwnerPhone("");
     setImages([]);
     setError("");
   }
@@ -90,6 +93,7 @@ export default function AdminChiffonForm({
         titleAm,
         description,
         descriptionAm,
+        ownerName,
         ownerPhone,
         images,
       };
@@ -136,6 +140,35 @@ export default function AdminChiffonForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Owner Name <span className="text-xs text-red-400">*</span>
+          </label>
+          <input
+            type="text"
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+            required
+            className="input-dark"
+            placeholder="Owner full name"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Owner Phone <span className="text-xs text-red-400">*</span>
+          </label>
+          <input
+            type="tel"
+            value={ownerPhone}
+            onChange={(e) => setOwnerPhone(e.target.value)}
+            required
+            className="input-dark"
+            placeholder="+251 9XX XXX XXX"
+          />
+        </div>
+      </div>
       <div>
         <label className="mb-1 block text-sm font-medium">
           Title <span className="text-xs text-muted">(English)</span>
@@ -192,19 +225,7 @@ export default function AdminChiffonForm({
         />
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium">
-          Owner Phone <span className="text-xs text-muted">(admin only)</span>
-        </label>
-        <input
-          type="tel"
-          value={ownerPhone}
-          onChange={(e) => setOwnerPhone(e.target.value)}
-          required
-          className="input-dark"
-          placeholder="+251 9XX XXX XXX"
-        />
-      </div>
+
 
       <div>
         <label className="mb-2 block text-sm font-medium">Images</label>

@@ -48,6 +48,7 @@ export default function EditChiffonClient({ id }: EditChiffonClientProps) {
         titleAm: chiffon.titleAm,
         description: chiffon.description,
         descriptionAm: chiffon.descriptionAm,
+        ownerName: chiffon.ownerName,
         ownerPhone: chiffon.ownerPhone,
         images: chiffon.images,
       }}

@@ -14,6 +14,7 @@ model Chiffon {
   description   String
   descriptionAm String       @default("")
   images        String
+  ownerName     String       @default("")
   ownerPhone    String
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt

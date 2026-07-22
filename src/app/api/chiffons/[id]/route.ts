@@ -23,6 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
     return NextResponse.json({
       ...toPublicChiffon(chiffon),
+      ownerName: chiffon.ownerName,
       ownerPhone: chiffon.ownerPhone,
       submissions: chiffon.submissions.map((s) => ({
         id: s.id,
@@ -70,7 +71,7 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { title, titleAm, description, descriptionAm, images, ownerPhone } =
+    const { title, titleAm, description, descriptionAm, images, ownerName, ownerPhone } =
       body;
 
     if (
@@ -78,12 +79,13 @@ export async function PUT(request: Request, context: RouteContext) {
       !titleAm?.trim() ||
       !description?.trim() ||
       !descriptionAm?.trim() ||
+      !ownerName?.trim() ||
       !ownerPhone?.trim()
     ) {
       return NextResponse.json(
         {
           error:
-            "Title, Amharic title, description, Amharic description, and owner phone are required",
+            "Title, Amharic title, description, Amharic description, owner name, and owner phone are required",
         },
         { status: 400 }
       );
@@ -109,6 +111,7 @@ export async function PUT(request: Request, context: RouteContext) {
         description: description.trim(),
         descriptionAm: descriptionAm.trim(),
         images: JSON.stringify(images),
+        ownerName: ownerName.trim(),
         ownerPhone: ownerPhone.trim(),
       },
     });

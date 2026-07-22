@@ -24,6 +24,7 @@ export async function GET() {
       description: c.description,
       descriptionAm: c.descriptionAm,
       images: parseImages(c.images),
+      ownerName: c.ownerName,
       ownerPhone: c.ownerPhone,
       createdAt: c.createdAt.toISOString(),
       submissionCount: c._count.submissions,
