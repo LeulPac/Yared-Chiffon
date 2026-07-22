@@ -26,6 +26,16 @@ export default function AdminDashboard() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmOwnerGroup, setDeleteConfirmOwnerGroup] =
     useState<OwnerGroup | null>(null);
+  
+  // Track which owner cards are expanded (showing all chiffons)
+  const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>({});
+
+  function toggleOwnerExpansion(key: string) {
+    setExpandedOwners((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  }
 
   function fetchAllChiffons() {
     fetch("/api/admin/chiffons")
@@ -268,124 +278,177 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div className="space-y-8">
-            {ownerGroups.map((group) => (
-              <div
-                key={group.key}
-                className="overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-6 shadow-xl transition hover:border-primary/40"
-              >
-                {/* Owner Card Header */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary font-display text-lg font-bold">
-                      {group.ownerName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-display text-xl font-semibold tracking-wide text-foreground">
-                          {group.ownerName}
-                        </h2>
-                        <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-0.5 text-xs text-primary font-medium">
-                          {group.chiffons.length} chiffon{group.chiffons.length !== 1 ? "s" : ""}
-                        </span>
+            {ownerGroups.map((group) => {
+              const isExpanded = expandedOwners[group.key] || Boolean(query);
+              const displayedChiffons = isExpanded
+                ? group.chiffons
+                : group.chiffons.slice(0, 1);
+              const hasMore = group.chiffons.length > 1;
+
+              return (
+                <div
+                  key={group.key}
+                  className="overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-6 shadow-xl transition-all duration-300 hover:border-primary/40"
+                >
+                  {/* Owner Card Header */}
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-5">
+                    <div
+                      className="flex items-center gap-3 cursor-pointer group/header select-none"
+                      onClick={() => toggleOwnerExpansion(group.key)}
+                    >
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary font-display text-lg font-bold group-hover/header:bg-primary/20 transition">
+                        {group.ownerName.charAt(0).toUpperCase()}
                       </div>
-                      <p className="mt-0.5 text-sm text-muted">
-                        Phone:{" "}
-                        <a
-                          href={toTelHref(group.ownerPhone)}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {group.ownerPhone}
-                        </a>
-                        <span className="mx-2 text-border">•</span>
-                        <span>{group.totalSubmissions} submission{group.totalSubmissions !== 1 ? "s" : ""} received</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Owner Card Action Buttons */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/admin/chiffons/new?ownerName=${encodeURIComponent(group.ownerName)}&ownerPhone=${encodeURIComponent(group.ownerPhone)}`}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 text-xs font-semibold text-primary transition hover:bg-primary/20 hover:border-primary"
-                    >
-                      <span>+ Add Chiffon for {group.ownerName}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteConfirmOwnerGroup(group)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 hover:border-red-500/60"
-                      title="Delete this entire owner card and all its chiffons"
-                    >
-                      <span>Delete Card</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Owner's Chiffons Grid */}
-                <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.chiffons.map((chiffon) => (
-                    <article
-                      key={chiffon.id}
-                      className="group flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card transition duration-300 hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(212,175,55,0.08)]"
-                    >
-                      <div className="relative h-44 w-full overflow-hidden bg-black">
-                        {chiffon.images[0] ? (
-                          <Image
-                            src={chiffon.images[0]}
-                            alt={chiffon.title}
-                            fill
-                            className="object-cover transition duration-500 group-hover:scale-105"
-                            sizes="(max-width: 768px) 100vw, 300px"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-muted text-sm">
-                            No image
-                          </div>
-                        )}
-                        <span className="absolute right-3 top-3 border border-primary/40 bg-black/85 px-3 py-1 text-xs font-semibold text-primary rounded-full shadow-lg">
-                          {chiffon.submissions.length} submission
-                          {chiffon.submissions.length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-
-                      <div className="flex-1 p-4 flex flex-col justify-between gap-3">
-                        <div>
-                          <h3 className="font-display text-base tracking-wide text-foreground line-clamp-1">
-                            {chiffon.title}
-                          </h3>
-                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
-                            {chiffon.description}
-                          </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="font-display text-xl font-semibold tracking-wide text-foreground group-hover/header:text-primary transition">
+                            {group.ownerName}
+                          </h2>
+                          <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-0.5 text-xs text-primary font-medium">
+                            {group.chiffons.length} chiffon{group.chiffons.length !== 1 ? "s" : ""}
+                          </span>
                         </div>
-
-                        <div className="border-t border-border/50 pt-3 flex flex-col gap-2">
-                          <button
-                            onClick={() => setSubmissionsModalChiffon(chiffon)}
-                            className="w-full text-center py-2 px-3 text-xs font-medium border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 transition rounded-lg"
+                        <p className="mt-0.5 text-sm text-muted">
+                          Phone:{" "}
+                          <a
+                            href={toTelHref(group.ownerPhone)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-primary hover:underline"
                           >
-                            View Submissions ({chiffon.submissions.length})
-                          </button>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Link
-                              href={`/admin/chiffons/${chiffon.id}/edit`}
-                              className="text-center py-1.5 px-3 text-xs font-medium border border-border text-muted hover:text-foreground hover:border-muted transition rounded-lg"
-                            >
-                              Edit
-                            </Link>
+                            {group.ownerPhone}
+                          </a>
+                          <span className="mx-2 text-border">•</span>
+                          <span>{group.totalSubmissions} submission{group.totalSubmissions !== 1 ? "s" : ""} received</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Owner Card Action Buttons */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {hasMore && !query && (
+                        <button
+                          type="button"
+                          onClick={() => toggleOwnerExpansion(group.key)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-white/5 px-3.5 py-2.5 text-xs font-medium text-muted transition hover:text-foreground hover:border-primary/40"
+                        >
+                          <span>{isExpanded ? "Collapse" : `View All (${group.chiffons.length})`}</span>
+                          <svg
+                            className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </button>
+                      )}
+
+                      <Link
+                        href={`/admin/chiffons/new?ownerName=${encodeURIComponent(group.ownerName)}&ownerPhone=${encodeURIComponent(group.ownerPhone)}`}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 text-xs font-semibold text-primary transition hover:bg-primary/20 hover:border-primary"
+                      >
+                        <span>+ Add Chiffon for {group.ownerName}</span>
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmOwnerGroup(group)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 hover:border-red-500/60"
+                        title="Delete this entire owner card and all its chiffons"
+                      >
+                        <span>Delete Card</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Owner's Chiffons Grid (1 preview card by default, or all if expanded) */}
+                  <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {displayedChiffons.map((chiffon) => (
+                      <article
+                        key={chiffon.id}
+                        className="group flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card transition duration-300 hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(212,175,55,0.08)]"
+                      >
+                        <div className="relative h-44 w-full overflow-hidden bg-black">
+                          {chiffon.images[0] ? (
+                            <Image
+                              src={chiffon.images[0]}
+                              alt={chiffon.title}
+                              fill
+                              className="object-cover transition duration-500 group-hover:scale-105"
+                              sizes="(max-width: 768px) 100vw, 300px"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-muted text-sm">
+                              No image
+                            </div>
+                          )}
+                          <span className="absolute right-3 top-3 border border-primary/40 bg-black/85 px-3 py-1 text-xs font-semibold text-primary rounded-full shadow-lg">
+                            {chiffon.submissions.length} submission
+                            {chiffon.submissions.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+
+                        <div className="flex-1 p-4 flex flex-col justify-between gap-3">
+                          <div>
+                            <h3 className="font-display text-base tracking-wide text-foreground line-clamp-1">
+                              {chiffon.title}
+                            </h3>
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
+                              {chiffon.description}
+                            </p>
+                          </div>
+
+                          <div className="border-t border-border/50 pt-3 flex flex-col gap-2">
                             <button
-                              onClick={() => setDeleteConfirmId(chiffon.id)}
-                              className="py-1.5 px-3 text-xs font-medium border border-red-500/20 text-red-400 hover:text-red-300 hover:bg-red-500/5 hover:border-red-500/50 transition rounded-lg"
+                              onClick={() => setSubmissionsModalChiffon(chiffon)}
+                              className="w-full text-center py-2 px-3 text-xs font-medium border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 transition rounded-lg"
                             >
-                              Delete
+                              View Submissions ({chiffon.submissions.length})
                             </button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Link
+                                href={`/admin/chiffons/${chiffon.id}/edit`}
+                                className="text-center py-1.5 px-3 text-xs font-medium border border-border text-muted hover:text-foreground hover:border-muted transition rounded-lg"
+                              >
+                                Edit
+                              </Link>
+                              <button
+                                onClick={() => setDeleteConfirmId(chiffon.id)}
+                                className="py-1.5 px-3 text-xs font-medium border border-red-500/20 text-red-400 hover:text-red-300 hover:bg-red-500/5 hover:border-red-500/50 transition rounded-lg"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    ))}
+                  </div>
+
+                  {/* Expand / Collapse Footer Trigger if Owner has multiple chiffons */}
+                  {hasMore && !query && (
+                    <div className="mt-6 flex items-center justify-between border-t border-border/40 pt-4">
+                      <span className="text-xs text-muted">
+                        {isExpanded
+                          ? `Showing all ${group.chiffons.length} chiffons`
+                          : `1 of ${group.chiffons.length} chiffons shown (${group.chiffons.length - 1} hidden)`}
+                      </span>
+                      <button
+                        onClick={() => toggleOwnerExpansion(group.key)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20 hover:scale-105"
+                      >
+                        <span>{isExpanded ? "Collapse List ▲" : `View All ${group.chiffons.length} Chiffons ▼`}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
