@@ -76,7 +76,7 @@ export const translations = {
     seeMore: "ብዙ ይመልከቱ",
     roomNumber: "የክፍል ቁጥር",
     value: "ዋጋ",
-    enterValue: "ዋጋ አስገባ",
+    enterValue: "ዋጋ አስገባ ",
     packageType: "የጥቅል አይነት",
     packageTaqa: "ጣቃ",
     packageSiry: "ሴሪ",

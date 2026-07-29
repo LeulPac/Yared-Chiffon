@@ -69,7 +69,14 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { message: "Your information has been submitted to the admin." },
+      {
+        message: "Your information has been submitted to the admin.",
+        chiffonId,
+        chiffonTitle: chiffon.title,
+        ownerName: chiffon.ownerName,
+        floor: floor.trim(),
+        roomNumber: roomNumber.trim(),
+      },
       { status: 201 }
     );
   }
@@ -96,6 +103,11 @@ export async function POST(request: Request) {
     {
       id: submission.id,
       message: "Your information has been submitted to the admin.",
+      chiffonId,
+      chiffonTitle: chiffon.title,
+      ownerName: chiffon.ownerName,
+      floor: floor.trim(),
+      roomNumber: roomNumber.trim(),
     },
     { status: 201 }
   );

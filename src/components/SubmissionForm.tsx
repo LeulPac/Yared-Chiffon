@@ -87,19 +87,29 @@ export default function SubmissionForm({
         }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || "Failed to submit");
       }
 
       if (typeof window !== "undefined") {
+        const notifyData = {
+          type: "submission-created",
+          chiffonId,
+          chiffonTitle: data.chiffonTitle || "",
+          ownerName: data.ownerName || "",
+          floor: data.floor || floor.trim(),
+          roomNumber: data.roomNumber || roomNumber.trim(),
+          timestamp: Date.now(),
+        };
+
         if ("BroadcastChannel" in window) {
           const channel = new BroadcastChannel("chiffon-updates");
-          channel.postMessage({ type: "submission-created" });
+          channel.postMessage(notifyData);
           channel.close();
-        } else {
-          localStorage.setItem("chiffon-updates", Date.now().toString());
         }
+        localStorage.setItem("chiffon-updates", JSON.stringify(notifyData));
       }
 
       onSuccess();
