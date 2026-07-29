@@ -42,3 +42,17 @@ enum PackageType {
   SIRY
   METER
 }
+
+model Notification {
+  id             String   @id @default(cuid())
+  chiffonId      String
+  chiffonTitle   String
+  ownerName      String
+  floor          String
+  roomNumber     String
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}

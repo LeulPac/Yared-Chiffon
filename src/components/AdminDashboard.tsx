@@ -319,8 +319,39 @@ export default function AdminDashboard() {
       .finally(() => setLoading(false));
   }
 
+  // Load notifications that were saved to DB while admin was offline
+  function fetchPersistentNotifications() {
+    fetch("/api/admin/notifications")
+      .then((res) => {
+        if (res.status === 401) return null;
+        return res.json();
+      })
+      .then((data: any[] | null) => {
+        if (!data) return;
+        const mapped = data.map((n) => ({
+          id: n.id,
+          chiffonId: n.chiffonId,
+          chiffonTitle: n.chiffonTitle,
+          ownerName: n.ownerName,
+          floor: n.floor,
+          roomNumber: n.roomNumber,
+          timestamp: new Date(n.createdAt),
+          read: n.read,
+        }));
+        // Merge: place DB notifications as the base; real-time ones will be prepended on top
+        setNotificationsList((prev) => {
+          // Avoid duplicating items already in state (by id)
+          const existingIds = new Set(prev.map((p) => p.id));
+          const fresh = mapped.filter((m) => !existingIds.has(m.id));
+          return [...prev, ...fresh];
+        });
+      })
+      .catch(() => {/* ignore */});
+  }
+
   useEffect(() => {
     fetchAllChiffons();
+    fetchPersistentNotifications();
 
     if (typeof window === "undefined") return;
 
@@ -515,7 +546,10 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-3">
                 {notificationsList.length > 0 && (
                   <button
-                    onClick={() => setNotificationsList([])}
+                    onClick={async () => {
+                      setNotificationsList([]);
+                      await fetch("/api/admin/notifications", { method: "DELETE" });
+                    }}
                     className="text-[11px] text-muted hover:text-red-400 transition"
                   >
                     Clear All
@@ -588,11 +622,18 @@ export default function AdminDashboard() {
           <>
             {/* Notification Bell Button */}
             <button
-              onClick={() => {
+              onClick={async () => {
                 setShowNotificationModal((prev) => !prev);
+                // Mark all unread as read locally
                 setNotificationsList((prev) =>
                   prev.map((n) => ({ ...n, read: true }))
                 );
+                // Persist read status to DB
+                await fetch("/api/admin/notifications", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({}),
+                });
               }}
               className="relative flex items-center justify-center h-9 w-9 rounded-xl border border-primary/40 bg-black/60 text-primary transition hover:bg-primary/20 hover:border-primary"
               title="View Submission Notifications"

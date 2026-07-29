@@ -69,6 +69,17 @@ export async function POST(request: Request) {
       })),
     });
 
+    // 💾 Persist notification to DB — survives even if admin is offline
+    await prisma.notification.create({
+      data: {
+        chiffonId,
+        chiffonTitle: chiffon.title,
+        ownerName: chiffon.ownerName,
+        floor: floor.trim(),
+        roomNumber: roomNumber.trim(),
+      },
+    });
+
     // 🔴 Broadcast real-time SSE event to all connected admin browsers
     emitSSEEvent("submission-created", {
       type: "submission-created",
@@ -108,6 +119,17 @@ export async function POST(request: Request) {
       roomNumber: roomNumber.trim(),
       value: value.trim(),
       packageType,
+    },
+  });
+
+  // 💾 Persist notification to DB — survives even if admin is offline
+  await prisma.notification.create({
+    data: {
+      chiffonId,
+      chiffonTitle: chiffon.title,
+      ownerName: chiffon.ownerName,
+      floor: floor.trim(),
+      roomNumber: roomNumber.trim(),
     },
   });
 
