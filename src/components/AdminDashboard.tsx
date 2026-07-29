@@ -322,42 +322,52 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchAllChiffons();
 
-    function processEvent(data: any) {
-      if (data?.type === "submission-created") {
-        fetchAllChiffons();
-        handleIncomingSubmissionNotification(data);
-      } else if (data?.type === "chiffon-posted") {
-        fetchAllChiffons();
-      }
-    }
+    if (typeof window === "undefined") return;
 
-    if (typeof window !== "undefined") {
-      let channel: BroadcastChannel | null = null;
-      if ("BroadcastChannel" in window) {
-        channel = new BroadcastChannel("chiffon-updates");
-        channel.onmessage = (event) => {
-          processEvent(event.data);
-        };
+    // ──────────────────────────────────────────────────────────────────
+    // Server-Sent Events — real-time cross-device updates.
+    // Works on mobile phones, tablets, and any browser on any network.
+    // ──────────────────────────────────────────────────────────────────
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      if (es) {
+        es.close();
       }
 
-      const handleStorage = (e: StorageEvent) => {
-        if (e.key === "chiffon-updates" && e.newValue) {
-          try {
-            const parsed = JSON.parse(e.newValue);
-            processEvent(parsed);
-          } catch {
-            fetchAllChiffons();
-          }
+      es = new EventSource("/api/admin/events");
+
+      es.addEventListener("submission-created", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          fetchAllChiffons();
+          handleIncomingSubmissionNotification(data);
+        } catch {
+          fetchAllChiffons();
         }
-      };
+      });
 
-      window.addEventListener("storage", handleStorage);
+      es.addEventListener("chiffon-posted", () => {
+        fetchAllChiffons();
+      });
 
-      return () => {
-        if (channel) channel.close();
-        window.removeEventListener("storage", handleStorage);
+      es.onerror = () => {
+        // Connection dropped — reconnect after 3 seconds
+        es?.close();
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => {
+          connect();
+        }, 3000);
       };
     }
+
+    connect();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) es.close();
+    };
   }, [router]);
 
   async function handleLogout() {

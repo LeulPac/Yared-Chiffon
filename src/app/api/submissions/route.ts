@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdminAuthenticated } from "@/lib/auth";
+import { emitSSEEvent } from "@/lib/sse-emitter";
 
 export async function GET() {
   if (!(await isAdminAuthenticated())) {
@@ -68,6 +69,17 @@ export async function POST(request: Request) {
       })),
     });
 
+    // 🔴 Broadcast real-time SSE event to all connected admin browsers
+    emitSSEEvent("submission-created", {
+      type: "submission-created",
+      chiffonId,
+      chiffonTitle: chiffon.title,
+      ownerName: chiffon.ownerName,
+      floor: floor.trim(),
+      roomNumber: roomNumber.trim(),
+      timestamp: Date.now(),
+    });
+
     return NextResponse.json(
       {
         message: "Your information has been submitted to the admin.",
@@ -97,6 +109,17 @@ export async function POST(request: Request) {
       value: value.trim(),
       packageType,
     },
+  });
+
+  // 🔴 Broadcast real-time SSE event to all connected admin browsers
+  emitSSEEvent("submission-created", {
+    type: "submission-created",
+    chiffonId,
+    chiffonTitle: chiffon.title,
+    ownerName: chiffon.ownerName,
+    floor: floor.trim(),
+    roomNumber: roomNumber.trim(),
+    timestamp: Date.now(),
   });
 
   return NextResponse.json(
