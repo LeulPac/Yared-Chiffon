@@ -10,72 +10,65 @@ type SubmissionFormProps = {
   onCancel: () => void;
 };
 
+// Fixed order: METER, TAQA, SIRY
+const ORDERED_TYPES = ["METER", "TAQA", "SIRY"] as const;
+
 export default function SubmissionForm({
   chiffonId,
   onSuccess,
   onCancel,
 }: SubmissionFormProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [floor, setFloor] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
-  
-  // Track selected package types (can select multiple)
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(["TAQA"]);
-  // Track value for each selected package type
-  const [packageValues, setPackageValues] = useState<Record<string, string>>({});
-  
+
+  // Values per package — all start empty; user fills only what applies
+  const [packageValues, setPackageValues] = useState<Record<string, string>>({
+    METER: "",
+    TAQA: "",
+    SIRY: "",
+  });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function togglePackage(typeValue: string) {
-    if (selectedTypes.includes(typeValue)) {
-      // Prevent unselecting if it's the last selected one
-      if (selectedTypes.length === 1) return;
-      setSelectedTypes((prev) => prev.filter((t) => t !== typeValue));
-    } else {
-      setSelectedTypes((prev) => [...prev, typeValue]);
-    }
+  function handleValueChange(type: string, val: string) {
+    setPackageValues((prev) => ({ ...prev, [type]: val }));
   }
 
-  function handleValueChange(typeValue: string, val: string) {
-    setPackageValues((prev) => ({
-      ...prev,
-      [typeValue]: val,
-    }));
+  function pkgLabel(type: string) {
+    if (type === "METER") return locale === "am" ? "ሜትር" : "Meter";
+    if (type === "TAQA") return "TAQA";
+    if (type === "SIRY") return locale === "am" ? "ሲሪ" : "SIRY";
+    return type;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    if (!selectedTypes.length) {
-      setError("Please select at least one package type.");
+    if (!floor.trim() || !roomNumber.trim()) {
+      setError(locale === "am" ? "ወለልና ክፍል ቁጥር ያስፈልጋል።" : "Floor and room number are required.");
       return;
     }
 
-    // Check that every selected package has a filled value
-    for (const pt of selectedTypes) {
-      const val = packageValues[pt]?.trim();
-      if (!val) {
-        const label =
-          pt === "TAQA"
-            ? t("packageTaqa")
-            : pt === "SIRY"
-              ? t("packageSiry")
-              : t("packageMeter");
-        setError(`Please fill in the value for ${label}.`);
-        return;
-      }
+    // Only submit packages that have a filled value
+    const items = ORDERED_TYPES
+      .map((pt) => ({ packageType: pt, value: packageValues[pt].trim() }))
+      .filter((item) => item.value.length > 0);
+
+    if (items.length === 0) {
+      setError(
+        locale === "am"
+          ? "ቢያንስ ለአንድ ፓኬጅ ዋጋ ያስፈልጋል።"
+          : "Please fill in at least one package value."
+      );
+      return;
     }
 
     setLoading(true);
 
     try {
-      const items = selectedTypes.map((pt) => ({
-        packageType: pt,
-        value: packageValues[pt].trim(),
-      }));
-
       const res = await fetch("/api/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,16 +114,17 @@ export default function SubmissionForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mt-4 space-y-4 rounded-xl border border-border bg-black/60 p-4 shadow-xl backdrop-blur-md"
-    >
-      <p className="text-sm font-semibold text-foreground">{t("haveThisChiffon")}</p>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <h3 className="font-display text-base font-semibold text-primary tracking-wide">
+        {locale === "am" ? "ቅጽ ሙሉ" : "I have this chiffon"}
+      </h3>
 
-      {/* Floor & Room Number */}
+      {/* Floor & Room */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-xs text-muted font-medium">{t("floor")} *</label>
+          <label className="mb-1 block text-xs text-muted font-medium">
+            {t("floor")} <span className="text-red-400">*</span>
+          </label>
           <input
             type="text"
             value={floor}
@@ -141,7 +135,9 @@ export default function SubmissionForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-muted font-medium">{t("roomNumber")} *</label>
+          <label className="mb-1 block text-xs text-muted font-medium">
+            {t("roomNumber")} <span className="text-red-400">*</span>
+          </label>
           <input
             type="text"
             value={roomNumber}
@@ -153,82 +149,44 @@ export default function SubmissionForm({
         </div>
       </div>
 
-      {/* Package Type Horizontal Selection Buttons */}
-      <div>
-        <label className="mb-1.5 block text-xs text-muted font-medium">
-          {t("packageType")} <span className="text-[10px] text-primary/70">(Select one or multiple)</span>
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {PACKAGE_TYPES.map((pt) => {
-            const isSelected = selectedTypes.includes(pt.value);
-            const label =
-              pt.value === "TAQA"
-                ? t("packageTaqa")
-                : pt.value === "SIRY"
-                  ? t("packageSiry")
-                  : t("packageMeter");
-
-            return (
-              <button
-                key={pt.value}
-                type="button"
-                onClick={() => togglePackage(pt.value)}
-                className={`py-2.5 px-2 text-xs font-semibold rounded-lg border transition-all duration-200 flex items-center justify-center gap-1.5 ${
-                  isSelected
-                    ? "border-primary bg-primary/20 text-primary shadow-[0_0_12px_rgba(212,175,55,0.25)]"
-                    : "border-border/70 bg-white/5 text-muted hover:border-primary/40 hover:text-foreground"
-                }`}
-              >
-                <span>{isSelected ? "✓" : "+"}</span>
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Per-Package Value Inputs */}
-      <div className="space-y-3 pt-1">
-        {selectedTypes.map((pt) => {
-          const label =
-            pt === "TAQA"
-              ? t("packageTaqa")
-              : pt === "SIRY"
-                ? t("packageSiry")
-                : t("packageMeter");
-
-          return (
-            <div key={pt} className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
-              <label className="mb-1 block text-xs font-medium text-primary">
-                {t("value")} for {label} *
-              </label>
-              <input
-                type="text"
-                value={packageValues[pt] ?? ""}
-                onChange={(e) => handleValueChange(pt, e.target.value)}
-                required
-                className="input-dark !rounded-lg !px-3 !py-2 text-sm"
-                placeholder={`${t("enterValue")} for ${label}`}
-              />
-            </div>
-          );
-        })}
+      {/* Package value inputs — all three shown, fill only what you have */}
+      <div className="space-y-2.5">
+        <p className="text-xs text-muted font-medium">
+          {locale === "am"
+            ? "የፓኬጅ ዋጋ ያስፈልጋል (ያሉህ/ያሏት ብቻ ሙሉ)"
+            : "Package values (fill only the ones you have)"}
+        </p>
+        {ORDERED_TYPES.map((pt) => (
+          <div key={pt} className="flex items-center gap-3">
+            <span className="w-14 shrink-0 text-xs font-semibold text-primary text-right">
+              {pkgLabel(pt)}
+            </span>
+            <input
+              type="text"
+              value={packageValues[pt]}
+              onChange={(e) => handleValueChange(pt, e.target.value)}
+              className="input-dark !rounded-lg !px-3 !py-2 text-sm flex-1"
+              placeholder={`Value…`}
+            />
+          </div>
+        ))}
       </div>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
-      <div className="flex gap-2 pt-2">
+      {/* Buttons */}
+      <div className="flex gap-2 pt-1">
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-muted transition hover:border-primary hover:text-primary"
+          className="flex-1 rounded-lg border border-border px-3 py-2.5 text-sm text-muted transition hover:border-primary hover:text-primary"
         >
           {t("cancel")}
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="btn-gold flex-1 px-3 py-2 text-sm disabled:opacity-50"
+          className="btn-gold flex-1 px-3 py-2.5 text-sm disabled:opacity-50"
         >
           {loading ? t("submitting") : t("submit")}
         </button>

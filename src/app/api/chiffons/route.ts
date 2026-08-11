@@ -22,21 +22,20 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { title, titleAm, description, descriptionAm, images, ownerName, ownerPhone } =
-      body;
+    const { title, titleAm, images, ownerName, ownerPhone } = body;
+    const description = (body.description || title || "").trim();
+    const descriptionAm = (body.descriptionAm || titleAm || "").trim();
 
     if (
       !title?.trim() ||
       !titleAm?.trim() ||
-      !description?.trim() ||
-      !descriptionAm?.trim() ||
       !ownerName?.trim() ||
       !ownerPhone?.trim()
     ) {
       return NextResponse.json(
         {
           error:
-            "Title, Amharic title, description, Amharic description, owner name, and owner phone are required",
+            "Title, Amharic title, owner name, and owner phone are required",
         },
         { status: 400 },
       );

@@ -141,17 +141,15 @@ export default function AdminDashboard() {
   const [chiffons, setChiffons] = useState<AdminChiffon[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedSubmissions, setExpandedSubmissions] = useState<Record<string, boolean>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmOwnerGroup, setDeleteConfirmOwnerGroup] =
     useState<OwnerGroup | null>(null);
-  
+
   // Ref for event deduplication
   const lastEventKeyRef = useRef<string>("");
 
-  // Track notifications list & modal state
+  // Track notifications list & banner state
   const [notificationsList, setNotificationsList] = useState<SubmissionNotificationItem[]>([]);
-  const [showNotificationModal, setShowNotificationModal] = useState<boolean>(false);
   const [notificationBanner, setNotificationBanner] = useState<SubmissionNotificationItem | null>(null);
   const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean>(false);
   const [highlightedChiffonId, setHighlightedChiffonId] = useState<string | null>(null);
@@ -205,9 +203,6 @@ export default function AdminDashboard() {
       const ownerKey = `${name}_${phone}`;
       setExpandedOwners((prev) => ({ ...prev, [ownerKey]: true }));
     }
-
-    // Expand submission dropdown under this specific card
-    setExpandedSubmissions((prev) => ({ ...prev, [targetChiffonId]: true }));
 
     // Set visual highlight ring
     setHighlightedChiffonId(targetChiffonId);
@@ -275,32 +270,22 @@ export default function AdminDashboard() {
           tag: "submission-created",
         });
         notif.onclick = () => {
-          if (typeof window !== "undefined") window.focus();
-          scrollToAndHighlightChiffon(chiffonId);
+          if (typeof window !== "undefined") {
+            window.focus();
+            window.location.href = "/admin/submissions";
+          }
         };
       }
     }
 
     // Set UI Toast Banner
     setNotificationBanner(newNotifItem);
-
-    // Automatically scroll & focus on the specified card
-    if (chiffonId) {
-      scrollToAndHighlightChiffon(chiffonId);
-    }
   }
 
   function toggleOwnerExpansion(key: string) {
     setExpandedOwners((prev) => ({
       ...prev,
       [key]: !prev[key],
-    }));
-  }
-
-  function toggleSubmissions(chiffonId: string) {
-    setExpandedSubmissions((prev) => ({
-      ...prev,
-      [chiffonId]: !prev[chiffonId],
     }));
   }
 
@@ -346,7 +331,7 @@ export default function AdminDashboard() {
           return [...prev, ...fresh];
         });
       })
-      .catch(() => {/* ignore */});
+      .catch(() => {/* ignore */ });
   }
 
   useEffect(() => {
@@ -474,13 +459,13 @@ export default function AdminDashboard() {
     }
     const group = ownerGroupMap.get(key)!;
     group.chiffons.push(c);
-    group.totalSubmissions += c.submissions.length;
+    group.totalSubmissions += groupSubmissions(c.submissions || []).length;
   });
 
   const ownerGroups = Array.from(ownerGroupMap.values());
 
   const grandTotalSubmissions = chiffons.reduce(
-    (sum, c) => sum + c.submissions.length,
+    (sum, c) => sum + groupSubmissions(c.submissions || []).length,
     0,
   );
 
@@ -490,9 +475,9 @@ export default function AdminDashboard() {
     <main className="min-h-screen bg-background relative">
       {/* Floating Notification Toast Banner for Real-time Submissions */}
       {notificationBanner && (
-        <div
-          onClick={() => scrollToAndHighlightChiffon(notificationBanner.chiffonId)}
-          className="fixed top-5 right-5 z-50 max-w-md cursor-pointer animate-bounce-in rounded-2xl border border-primary/60 bg-black/95 p-4 text-foreground shadow-[0_10px_40px_rgba(212,175,55,0.45)] backdrop-blur-md hover:scale-[1.02] transition-transform"
+        <Link
+          href="/admin/submissions"
+          className="fixed top-5 right-5 z-50 max-w-md cursor-pointer animate-bounce-in rounded-2xl border border-primary/60 bg-black/95 p-4 text-foreground shadow-[0_10px_40px_rgba(212,175,55,0.45)] backdrop-blur-md hover:scale-[1.02] transition-transform block"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -516,6 +501,7 @@ export default function AdminDashboard() {
             </div>
             <button
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 setNotificationBanner(null);
               }}
@@ -524,127 +510,39 @@ export default function AdminDashboard() {
               ✕
             </button>
           </div>
-        </div>
+        </Link>
       )}
 
-      {/* Notification Center Pop-up Modal / Drawer */}
-      {showNotificationModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-end p-4 sm:p-6 bg-black/75 backdrop-blur-xs animate-fade-in">
-          <div
-            className="absolute inset-0"
-            onClick={() => setShowNotificationModal(false)}
-          />
-          <div className="relative z-10 w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl border border-primary/50 bg-card shadow-2xl overflow-hidden mt-16 sm:mt-14">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border/80 p-4 bg-black/60">
-              <div className="flex items-center gap-2">
-                <span className="text-lg text-primary">🔔</span>
-                <h3 className="font-display text-base font-semibold text-foreground">
-                  Submissions Notifications ({notificationsList.length})
-                </h3>
-              </div>
-              <div className="flex items-center gap-3">
-                {notificationsList.length > 0 && (
-                  <button
-                    onClick={async () => {
-                      setNotificationsList([]);
-                      await fetch("/api/admin/notifications", { method: "DELETE" });
-                    }}
-                    className="text-[11px] text-muted hover:text-red-400 transition"
-                  >
-                    Clear All
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowNotificationModal(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-xs text-muted hover:text-foreground transition"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
 
-            {/* Notifications List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {notificationsList.length === 0 ? (
-                <div className="py-12 text-center text-muted text-xs">
-                  No notifications yet. New submissions will appear here.
-                </div>
-              ) : (
-                notificationsList.map((notif) => (
-                  <button
-                    key={notif.id}
-                    type="button"
-                    onClick={() => {
-                      setShowNotificationModal(false);
-                      scrollToAndHighlightChiffon(notif.chiffonId);
-                    }}
-                    className="w-full text-left group flex items-start gap-3 p-3.5 rounded-xl cursor-pointer transition bg-black/60 hover:bg-primary/15 border border-border/70 hover:border-primary/50 shadow-sm active:scale-[0.98] select-none"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary group-hover:scale-105 transition">
-                      🔔
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="text-xs font-semibold text-primary truncate">
-                          {notif.chiffonTitle}
-                        </h4>
-                        <span className="text-[10px] text-muted whitespace-nowrap">
-                          {new Date(notif.timestamp).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-foreground/90 font-medium">
-                        Owner: {notif.ownerName}
-                      </p>
-                      <p className="text-[11px] text-muted mt-0.5">
-                        Floor: <span className="text-foreground font-semibold">{notif.floor}</span> • Room:{" "}
-                        <span className="text-foreground font-semibold">{notif.roomNumber}</span>
-                      </p>
-                      <span className="mt-1 inline-block text-[10px] font-semibold text-primary group-hover:underline">
-                        View Card →
-                      </span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <AdminHeader
         title="Admin Dashboard"
         subtitle={`${chiffons.length} chiffons · ${ownerGroups.length} owners · ${grandTotalSubmissions} submissions`}
         actions={
           <>
-            {/* Notification Bell Button */}
-            <button
+            {/* View Submissions Button */}
+            <Link
+              href="/admin/submissions"
               onClick={async () => {
-                setShowNotificationModal((prev) => !prev);
-                // Mark all unread as read locally
                 setNotificationsList((prev) =>
                   prev.map((n) => ({ ...n, read: true }))
                 );
-                // Persist read status to DB
                 await fetch("/api/admin/notifications", {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({}),
-                });
+                }).catch(() => {});
               }}
-              className="relative flex items-center justify-center h-9 w-9 rounded-xl border border-primary/40 bg-black/60 text-primary transition hover:bg-primary/20 hover:border-primary"
-              title="View Submission Notifications"
+              className="relative flex items-center justify-center gap-2 h-9 px-4 rounded-xl border border-primary/40 bg-black/60 text-primary transition hover:bg-primary/20 hover:border-primary font-semibold text-xs select-none shadow-md"
+              title="View Submissions"
             >
-              <span className="text-base">🔔</span>
+              <span>📋 View Submissions</span>
               {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-lg animate-bounce">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-lg animate-bounce">
                   {unreadCount}
                 </span>
               )}
-            </button>
+            </Link>
 
             {!hasNotificationPermission && (
               <button
@@ -862,11 +760,10 @@ export default function AdminDashboard() {
                       <article
                         key={chiffon.id}
                         id={`chiffon-card-${chiffon.id}`}
-                        className={`group flex flex-col justify-between overflow-hidden rounded-xl border bg-card transition-all duration-500 ${
-                          highlightedChiffonId === chiffon.id
+                        className={`group flex flex-col justify-between overflow-hidden rounded-xl border bg-card transition-all duration-500 ${highlightedChiffonId === chiffon.id
                             ? "border-primary ring-4 ring-primary/60 shadow-[0_0_35px_rgba(212,175,55,0.6)] scale-[1.02]"
                             : "border-border hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(212,175,55,0.08)]"
-                        }`}
+                          }`}
                       >
                         <div className="relative h-44 w-full overflow-hidden bg-black">
                           {chiffon.images[0] ? (
@@ -883,8 +780,8 @@ export default function AdminDashboard() {
                             </div>
                           )}
                           <span className="absolute right-3 top-3 border border-primary/40 bg-black/85 px-3 py-1 text-xs font-semibold text-primary rounded-full shadow-lg">
-                            {chiffon.submissions.length} submission
-                            {chiffon.submissions.length !== 1 ? "s" : ""}
+                            {groupSubmissions(chiffon.submissions || []).length} submission
+                            {groupSubmissions(chiffon.submissions || []).length !== 1 ? "s" : ""}
                           </span>
                         </div>
 
@@ -898,37 +795,7 @@ export default function AdminDashboard() {
                             </p>
                           </div>
 
-                          <div className="border-t border-border/50 pt-3 flex flex-col gap-2">
-                            <button
-                              onClick={() => toggleSubmissions(chiffon.id)}
-                              className={`w-full text-center py-2 px-3 text-xs font-medium border transition rounded-lg flex items-center justify-center gap-1.5 ${
-                                expandedSubmissions[chiffon.id]
-                                  ? "border-primary bg-primary/20 text-primary font-semibold shadow-[0_0_15px_rgba(212,175,55,0.2)]"
-                                  : "border-primary/30 text-primary bg-primary/5 hover:bg-primary/10"
-                              }`}
-                            >
-                              <span>
-                                {expandedSubmissions[chiffon.id]
-                                  ? "Hide Submissions"
-                                  : "View Submissions"}{" "}
-                                ({chiffon.submissions.length})
-                              </span>
-                              <svg
-                                className={`h-3.5 w-3.5 transition-transform duration-200 ${
-                                  expandedSubmissions[chiffon.id] ? "rotate-180" : ""
-                                }`}
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M19 9l-7 7-7-7"
-                                />
-                              </svg>
-                            </button>
+                          <div className="border-t border-border/50 pt-3">
                             <div className="grid grid-cols-2 gap-2">
                               <Link
                                 href={`/admin/chiffons/${chiffon.id}/edit`}
@@ -944,96 +811,6 @@ export default function AdminDashboard() {
                               </button>
                             </div>
                           </div>
-
-                          {/* Submissions Dropdown Panel */}
-                          {expandedSubmissions[chiffon.id] && (
-                            <div className="mt-3 border-t border-border/80 pt-3 animate-fade-in">
-                              <div className="flex items-center justify-between mb-2.5">
-                                <span className="text-[11px] font-semibold tracking-wider text-primary uppercase">
-                                  Submissions List ({chiffon.submissions.length})
-                                </span>
-                                <button
-                                  onClick={() => toggleSubmissions(chiffon.id)}
-                                  className="text-[10px] text-muted hover:text-primary transition"
-                                >
-                                  Close ✕
-                                </button>
-                              </div>
-
-                              {chiffon.submissions.length === 0 ? (
-                                <p className="text-xs text-muted text-center py-4 bg-white/5 rounded-lg border border-border/40">
-                                  No submissions yet for this chiffon.
-                                </p>
-                              ) : (
-                                <div className="overflow-x-auto rounded-xl border border-border/60 bg-black/50 p-2 shadow-inner">
-                                  <table className="w-full text-left text-xs">
-                                    <thead>
-                                      <tr className="border-b border-border/60 text-muted/80 text-[11px]">
-                                        <th className="pb-2 pl-2 pr-2 font-semibold">
-                                          Floor
-                                        </th>
-                                        <th className="pb-2 pr-2 font-semibold">
-                                          Room
-                                        </th>
-                                        <th className="pb-2 pr-2 font-semibold">
-                                          Package &amp; Value
-                                        </th>
-                                        <th className="pb-2 pr-2 font-semibold text-right">
-                                          Date
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/30">
-                                      {groupSubmissions(chiffon.submissions).map(
-                                        (group) => (
-                                          <tr
-                                            key={group.key}
-                                            className="hover:bg-white/5 transition-colors"
-                                          >
-                                            <td className="py-2 pl-2 pr-2 font-medium text-foreground whitespace-nowrap">
-                                              {group.floor}
-                                            </td>
-                                            <td className="py-2 pr-2 text-foreground/90 whitespace-nowrap">
-                                              {group.roomNumber}
-                                            </td>
-                                            <td className="py-2 pr-2">
-                                              <div className="flex flex-wrap items-center gap-1.5">
-                                                {group.items.map((item, idx) => (
-                                                  <span
-                                                    key={item.id || idx}
-                                                    className="inline-flex items-center gap-1 text-[11px] font-medium border border-primary/40 bg-primary/10 text-primary px-2 py-0.5 rounded-md"
-                                                  >
-                                                    <span>
-                                                      {item.packageType === "TAQA"
-                                                        ? "TAQA"
-                                                        : item.packageType === "SIRY"
-                                                          ? "SIRY"
-                                                          : item.packageType ===
-                                                              "METER"
-                                                            ? "METER"
-                                                            : item.packageType}
-                                                    </span>
-                                                    <span className="text-foreground font-semibold">
-                                                      ({item.value})
-                                                    </span>
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            </td>
-                                            <td className="py-2 pr-2 text-right text-muted whitespace-nowrap text-[11px]">
-                                              {new Date(
-                                                group.createdAt
-                                              ).toLocaleDateString()}
-                                            </td>
-                                          </tr>
-                                        )
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </article>
                     ))}

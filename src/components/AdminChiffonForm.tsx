@@ -7,8 +7,8 @@ type ChiffonFormData = {
   id?: string;
   title: string;
   titleAm: string;
-  description: string;
-  descriptionAm: string;
+  description?: string;
+  descriptionAm?: string;
   ownerName?: string;
   ownerPhone: string;
   images: string[];
@@ -28,9 +28,7 @@ export default function AdminChiffonForm({
   const [title, setTitle] = useState(initialData?.title ?? "");
   const [titleAm, setTitleAm] = useState(initialData?.titleAm ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
-  const [descriptionAm, setDescriptionAm] = useState(
-    initialData?.descriptionAm ?? "",
-  );
+  const [descriptionAm, setDescriptionAm] = useState(initialData?.descriptionAm ?? "");
   const [ownerName, setOwnerName] = useState(initialData?.ownerName ?? "");
   const [ownerPhone, setOwnerPhone] = useState(initialData?.ownerPhone ?? "");
   const [images, setImages] = useState<string[]>(initialData?.images ?? []);
@@ -91,8 +89,8 @@ export default function AdminChiffonForm({
       const payload = {
         title,
         titleAm,
-        description,
-        descriptionAm,
+        description: description.trim() || title.trim(),
+        descriptionAm: descriptionAm.trim() || titleAm.trim(),
         ownerName,
         ownerPhone,
         images,
@@ -110,7 +108,7 @@ export default function AdminChiffonForm({
       if (!res.ok) {
         throw new Error(
           data?.error ||
-            `Failed to ${isEditing ? "update" : "create"} chiffon`,
+          `Failed to ${isEditing ? "update" : "create"} chiffon`,
         );
       }
 
@@ -199,32 +197,29 @@ export default function AdminChiffonForm({
 
       <div>
         <label className="mb-1 block text-sm font-medium">
-          Description <span className="text-xs text-muted">(English)</span>
+          Description <span className="text-xs text-muted">(Optional, English)</span>
         </label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          required
-          rows={4}
+          rows={2}
           className="input-dark"
-          placeholder="Describe the chiffon pattern, color, origin..."
+          placeholder="Describe the chiffon pattern, color..."
         />
       </div>
 
       <div>
         <label className="mb-1 block text-sm font-medium">
-          መግለጫ <span className="text-xs text-muted">(አማርኛ)</span>
+          መግለጫ <span className="text-xs text-muted">(Optional, አማርኛ)</span>
         </label>
         <textarea
           value={descriptionAm}
           onChange={(e) => setDescriptionAm(e.target.value)}
-          required
-          rows={4}
+          rows={2}
           className="input-dark"
-          placeholder="የሽፎኑ ጥለት፣ ቀለም፣ አመጣጥ..."
+          placeholder="የሽፎኑ ጥለት፣ ቀለም..."
         />
       </div>
-
 
 
       <div>
