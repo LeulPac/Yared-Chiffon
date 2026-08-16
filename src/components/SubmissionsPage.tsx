@@ -8,12 +8,30 @@ import type { AdminChiffon, AdminSubmission } from "@/lib/types";
 import { toTelHref } from "@/lib/phone";
 import AdminHeader from "./AdminHeader";
 
+const STORAGE_KEY = "yared_visited_submissions";
+
+function getVisitedFromStorage(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
 type OwnerGroup = {
   key: string;
   ownerName: string;
   ownerPhone: string;
   chiffons: AdminChiffon[];
   totalSubmissions: number;
+  liveNewSubmissions: number;
+  initialNewSubmissions: number;
+  latestInitialNewSubmissionTime: number;
+  latestOverallSubmissionTime: number;
 };
 
 type GroupedSubmission = {
@@ -21,7 +39,8 @@ type GroupedSubmission = {
   floor: string;
   roomNumber: string;
   createdAt: string;
-  items: { id: string; packageType: string; value: string }[];
+  items: { id: string; packageType: string; value: string; isNew: boolean }[];
+  isNew: boolean;
 };
 
 // Sort items in each group: METER first, then TAQA, then SIRY
@@ -41,20 +60,21 @@ function pkgDot(type: string) {
   return PKG_META[type]?.dot ?? "bg-primary";
 }
 
-function sortItems(items: { id: string; packageType: string; value: string }[]) {
+function sortItems(items: { id: string; packageType: string; value: string; isNew: boolean }[]) {
   return [...items].sort(
     (a, b) =>
       (PACKAGE_ORDER[a.packageType] ?? 99) - (PACKAGE_ORDER[b.packageType] ?? 99)
   );
 }
 
-function groupSubmissions(submissions: AdminSubmission[]): GroupedSubmission[] {
+function groupSubmissions(submissions: AdminSubmission[], visitedIds: Set<string> = new Set()): GroupedSubmission[] {
   const map = new Map<string, GroupedSubmission>();
 
   for (const s of submissions) {
     const dateObj = new Date(s.createdAt);
     const timeKey = Math.floor(dateObj.getTime() / 10000);
     const key = `${(s.floor || "").trim().toLowerCase()}_${(s.roomNumber || "").trim().toLowerCase()}_${timeKey}`;
+    const isNew = !visitedIds.has(s.id);
 
     if (!map.has(key)) {
       map.set(key, {
@@ -63,23 +83,56 @@ function groupSubmissions(submissions: AdminSubmission[]): GroupedSubmission[] {
         roomNumber: s.roomNumber,
         createdAt: s.createdAt,
         items: [],
+        isNew: false,
       });
     }
 
     const group = map.get(key)!;
+    if (isNew) group.isNew = true;
+
     group.items.push({
       id: s.id,
       packageType: s.packageType,
       value: s.value,
+      isNew,
     });
+
+    if (new Date(s.createdAt).getTime() > new Date(group.createdAt).getTime()) {
+      group.createdAt = s.createdAt;
+    }
   }
 
-  // Sort items within each group
   const result = Array.from(map.values());
   result.forEach((g) => {
     g.items = sortItems(g.items);
   });
-  return result;
+
+  // Sort groups: unvisited (isNew) first, then by createdAt descending
+  return result.sort((a, b) => {
+    if (a.isNew !== b.isNew) {
+      return a.isNew ? -1 : 1;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+function getChiffonNewCount(chiffon: AdminChiffon, visitedIds: Set<string>): number {
+  if (!chiffon.submissions) return 0;
+  return chiffon.submissions.filter((s) => !visitedIds.has(s.id)).length;
+}
+
+function getChiffonLatestNewDate(chiffon: AdminChiffon, visitedIds: Set<string>): number {
+  if (!chiffon.submissions) return 0;
+  const unvisited = chiffon.submissions.filter((s) => !visitedIds.has(s.id));
+  if (unvisited.length === 0) return 0;
+  return Math.max(...unvisited.map((s) => new Date(s.createdAt).getTime()));
+}
+
+function getChiffonLatestSubmissionDate(chiffon: AdminChiffon): number {
+  if (!chiffon.submissions || chiffon.submissions.length === 0) {
+    return new Date(chiffon.createdAt).getTime();
+  }
+  return Math.max(...chiffon.submissions.map((s) => new Date(s.createdAt).getTime()));
 }
 
 const SUPER_CARD_THEMES = [
@@ -140,12 +193,61 @@ export default function SubmissionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSubmissions, setExpandedSubmissions] = useState<Record<string, boolean>>({});
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>({});
+  const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set());
+  const [initialVisitedIds, setInitialVisitedIds] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    const loaded = getVisitedFromStorage();
+    setVisitedIds(loaded);
+    setInitialVisitedIds(new Set(loaded));
+  }, []);
+
+  function markAsVisited(submissionIds: string[]) {
+    if (!submissionIds || submissionIds.length === 0) return;
+    setVisitedIds((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of submissionIds) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      if (changed) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(next)));
+        } catch (e) {
+          console.error("Failed to update visited state", e);
+        }
+        return next;
+      }
+      return prev;
+    });
+  }
 
   function toggleSubmissions(chiffonId: string) {
     setExpandedSubmissions((prev) => ({
       ...prev,
       [chiffonId]: !prev[chiffonId],
     }));
+  }
+
+  // When clicking "View Submissions" / "Hide Submissions" toggle button
+  function handleViewSubmissionsClick(chiffon: AdminChiffon) {
+    const isCurrentlyExpanded = Boolean(expandedSubmissions[chiffon.id]);
+    if (isCurrentlyExpanded) {
+      // Closing the dropdown -> mark as visited!
+      const subIds = (chiffon.submissions || []).map((s) => s.id);
+      markAsVisited(subIds);
+    }
+    toggleSubmissions(chiffon.id);
+  }
+
+  // When clicking "Close ✕" inside the open dropdown
+  function handleCloseDropdownClick(chiffon: AdminChiffon) {
+    const subIds = (chiffon.submissions || []).map((s) => s.id);
+    markAsVisited(subIds);
+    toggleSubmissions(chiffon.id);
   }
 
   function toggleOwner(key: string) {
@@ -220,14 +322,27 @@ export default function SubmissionsPage() {
     );
   });
 
+  // Determine visited set for SORTING (locked on page load) vs LIVE BADGES
+  const sortVisitedSet = initialVisitedIds ?? visitedIds;
+
   // Build owner groups, only including chiffons that have at least 1 submission
   const ownerGroupMap = new Map<string, OwnerGroup>();
   filteredChiffons.forEach((c) => {
-    const uniqueCount = groupSubmissions(c.submissions || []).length;
+    const subGroups = groupSubmissions(c.submissions || [], visitedIds);
+    const uniqueCount = subGroups.length;
     if (uniqueCount === 0) return;
+
     const name = (c.ownerName || "Unknown Owner").trim();
     const phone = (c.ownerPhone || "").trim();
     const key = `${name}_${phone}`;
+
+    // Live unvisited count for UI badges
+    const liveChiffonNewCount = getChiffonNewCount(c, visitedIds);
+
+    // Initial unvisited count & timestamps for stable position sorting
+    const initialChiffonNewCount = getChiffonNewCount(c, sortVisitedSet);
+    const initialChiffonLatestNewTime = getChiffonLatestNewDate(c, sortVisitedSet);
+    const chiffonLatestOverallTime = getChiffonLatestSubmissionDate(c);
 
     if (!ownerGroupMap.has(key)) {
       ownerGroupMap.set(key, {
@@ -236,14 +351,64 @@ export default function SubmissionsPage() {
         ownerPhone: phone,
         chiffons: [],
         totalSubmissions: 0,
+        liveNewSubmissions: 0,
+        initialNewSubmissions: 0,
+        latestInitialNewSubmissionTime: 0,
+        latestOverallSubmissionTime: 0,
       });
     }
     const group = ownerGroupMap.get(key)!;
     group.chiffons.push(c);
     group.totalSubmissions += uniqueCount;
+    group.liveNewSubmissions += liveChiffonNewCount;
+    group.initialNewSubmissions += initialChiffonNewCount;
+
+    if (initialChiffonLatestNewTime > group.latestInitialNewSubmissionTime) {
+      group.latestInitialNewSubmissionTime = initialChiffonLatestNewTime;
+    }
+    if (chiffonLatestOverallTime > group.latestOverallSubmissionTime) {
+      group.latestOverallSubmissionTime = chiffonLatestOverallTime;
+    }
   });
 
-  const ownerGroups = Array.from(ownerGroupMap.values());
+  // Sort chiffons INSIDE each OwnerGroup using initial page-load state (STABLE SORTING)
+  ownerGroupMap.forEach((group) => {
+    group.chiffons.sort((a, b) => {
+      const aNewCount = getChiffonNewCount(a, sortVisitedSet);
+      const bNewCount = getChiffonNewCount(b, sortVisitedSet);
+      const aHasNew = aNewCount > 0;
+      const bHasNew = bNewCount > 0;
+
+      if (aHasNew !== bHasNew) {
+        return bHasNew ? 1 : -1;
+      }
+
+      if (aHasNew && bHasNew) {
+        const aLatestNew = getChiffonLatestNewDate(a, sortVisitedSet);
+        const bLatestNew = getChiffonLatestNewDate(b, sortVisitedSet);
+        return bLatestNew - aLatestNew;
+      }
+
+      return getChiffonLatestSubmissionDate(b) - getChiffonLatestSubmissionDate(a);
+    });
+  });
+
+  // Sort OwnerGroups using initial page-load state (STABLE SORTING)
+  const ownerGroups = Array.from(ownerGroupMap.values()).sort((a, b) => {
+    const aHasNew = a.initialNewSubmissions > 0;
+    const bHasNew = b.initialNewSubmissions > 0;
+
+    if (aHasNew !== bHasNew) {
+      return bHasNew ? 1 : -1;
+    }
+
+    if (aHasNew && bHasNew) {
+      return b.latestInitialNewSubmissionTime - a.latestInitialNewSubmissionTime;
+    }
+
+    return b.latestOverallSubmissionTime - a.latestOverallSubmissionTime;
+  });
+
   const grandTotal = ownerGroups.reduce((s, g) => s + g.totalSubmissions, 0);
 
   return (
@@ -349,7 +514,7 @@ export default function SubmissionsPage() {
                         {group.ownerName.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="font-display text-xl font-semibold tracking-wide text-foreground group-hover/header:text-white transition">
                             {group.ownerName}
                           </h2>
@@ -358,6 +523,12 @@ export default function SubmissionsPage() {
                           >
                             {group.chiffons.length} chiffon{group.chiffons.length !== 1 ? "s" : ""}
                           </span>
+                          {group.liveNewSubmissions > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/80 bg-emerald-500/25 px-3 py-0.5 text-xs font-extrabold text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse">
+                              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                              {group.liveNewSubmissions} NEW
+                            </span>
+                          )}
                         </div>
                         <p className="mt-0.5 text-sm text-muted">
                           Phone:{" "}
@@ -399,14 +570,19 @@ export default function SubmissionsPage() {
                   {/* Chiffon Sub-cards Grid */}
                   <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 items-start">
                     {displayedChiffons.map((chiffon) => {
-                      const subGroups = groupSubmissions(chiffon.submissions || []);
+                      const subGroups = groupSubmissions(chiffon.submissions || [], visitedIds);
                       const subCount = subGroups.length;
+                      const chiffonLiveNewCount = getChiffonNewCount(chiffon, visitedIds);
                       const isSubExpanded = searchQuery.trim() ? true : Boolean(expandedSubmissions[chiffon.id]);
 
                       return (
                         <article
                           key={chiffon.id}
-                          className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all duration-300 hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(212,175,55,0.08)]"
+                          className={`group flex flex-col overflow-hidden rounded-xl border bg-card transition-all duration-300 hover:border-primary/50 hover:shadow-[0_12px_30px_rgba(212,175,55,0.08)] ${
+                            chiffonLiveNewCount > 0
+                              ? "border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+                              : "border-border"
+                          }`}
                         >
                           {/* Thumbnail */}
                           <div className="relative h-44 w-full overflow-hidden bg-black">
@@ -423,9 +599,16 @@ export default function SubmissionsPage() {
                                 No image
                               </div>
                             )}
+
+                            {chiffonLiveNewCount > 0 && (
+                              <span className="absolute left-3 top-3 border border-emerald-400/80 bg-emerald-950/90 px-2.5 py-1 text-xs font-bold text-emerald-300 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                                {chiffonLiveNewCount} NEW
+                              </span>
+                            )}
+
                             <span className="absolute right-3 top-3 border border-primary/40 bg-black/85 px-3 py-1 text-xs font-semibold text-primary rounded-full shadow-lg">
-                              {subCount} submission
-                              {subCount !== 1 ? "s" : ""}
+                              {subCount} submission{subCount !== 1 ? "s" : ""}
                             </span>
                           </div>
 
@@ -443,19 +626,23 @@ export default function SubmissionsPage() {
                             {/* View Submissions Toggle */}
                             <div className="border-t border-border/50 pt-3">
                               <button
-                                onClick={() => toggleSubmissions(chiffon.id)}
-                                className={`w-full text-center py-2 px-3 text-xs font-medium border transition rounded-lg flex items-center justify-center gap-1.5 ${isSubExpanded
+                                onClick={() => handleViewSubmissionsClick(chiffon)}
+                                className={`w-full text-center py-2 px-3 text-xs font-medium border transition rounded-lg flex items-center justify-center gap-1.5 ${
+                                  isSubExpanded
                                     ? "border-primary bg-primary/20 text-primary font-semibold shadow-[0_0_15px_rgba(212,175,55,0.2)]"
+                                    : chiffonLiveNewCount > 0
+                                    ? "border-emerald-500/70 text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 animate-pulse font-semibold"
                                     : "border-primary/30 text-primary bg-primary/5 hover:bg-primary/10"
-                                  }`}
+                                }`}
                               >
                                 <span>
                                   {isSubExpanded ? "Hide Submissions" : "View Submissions"}{" "}
                                   ({subCount})
                                 </span>
                                 <svg
-                                  className={`h-3.5 w-3.5 transition-transform duration-200 ${isSubExpanded ? "rotate-180" : ""
-                                    }`}
+                                  className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                                    isSubExpanded ? "rotate-180" : ""
+                                  }`}
                                   fill="none"
                                   stroke="currentColor"
                                   viewBox="0 0 24 24"
@@ -473,8 +660,8 @@ export default function SubmissionsPage() {
                                     Submissions List ({subCount})
                                   </span>
                                   <button
-                                    onClick={() => toggleSubmissions(chiffon.id)}
-                                    className="text-[10px] text-muted hover:text-primary transition"
+                                    onClick={() => handleCloseDropdownClick(chiffon)}
+                                    className="text-[10px] text-muted hover:text-primary transition font-semibold cursor-pointer"
                                   >
                                     Close ✕
                                   </button>
@@ -495,31 +682,50 @@ export default function SubmissionsPage() {
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-border/30">
-                                        {subGroups.map((grp) => (
-                                          <tr key={grp.key} className="hover:bg-white/5 transition-colors">
-                                            <td className="py-2 pl-3 pr-2 text-center font-medium text-foreground whitespace-nowrap">
-                                              {grp.floor}
-                                            </td>
-                                            <td className="py-2 px-2 text-center font-medium text-foreground/90 whitespace-nowrap">
-                                              {grp.roomNumber}
-                                            </td>
-                                            <td className="py-2 pl-2 pr-3">
-                                              <div className="flex flex-nowrap items-center gap-1.5">
-                                                {grp.items.map((item, idx) => (
-                                                  <span
-                                                    key={item.id || idx}
-                                                    title={`${item.packageType} (${item.value})`}
-                                                    className="inline-flex items-center gap-0.5 text-[11px] font-semibold border border-primary/40 bg-primary/10 text-primary px-1.5 py-0.5 rounded-md shrink-0"
-                                                  >
-                                                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pkgDot(item.packageType)}`} />
-                                                    <span>{pkgLabel(item.packageType)}</span>
-                                                    <span className="text-foreground">({item.value})</span>
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        ))}
+                                        {subGroups.map((grp) => {
+                                          return (
+                                            <tr
+                                              key={grp.key}
+                                              className={`transition-colors ${
+                                                grp.isNew
+                                                  ? "bg-emerald-950/40"
+                                                  : "hover:bg-white/5"
+                                              }`}
+                                            >
+                                              <td className="py-2 pl-3 pr-2 text-center font-medium text-foreground whitespace-nowrap">
+                                                {grp.floor}
+                                              </td>
+                                              <td className="py-2 px-2 text-center font-medium text-foreground/90 whitespace-nowrap">
+                                                {grp.roomNumber}
+                                              </td>
+                                              <td className="py-2 pl-2 pr-3">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                  {grp.isNew && (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-500/25 border border-emerald-400/70 px-1.5 py-0.5 rounded animate-pulse shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.4)]">
+                                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                                                      new
+                                                    </span>
+                                                  )}
+                                                  {grp.items.map((item, idx) => (
+                                                    <span
+                                                      key={item.id || idx}
+                                                      title={`${item.packageType} (${item.value})`}
+                                                      className={`inline-flex items-center gap-0.5 text-[11px] font-semibold border px-1.5 py-0.5 rounded-md shrink-0 ${
+                                                        item.isNew
+                                                          ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-200 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                                          : "border-primary/40 bg-primary/10 text-primary"
+                                                      }`}
+                                                    >
+                                                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pkgDot(item.packageType)}`} />
+                                                      <span>{pkgLabel(item.packageType)}</span>
+                                                      <span className="text-foreground">({item.value})</span>
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
                                       </tbody>
                                     </table>
                                   </div>
