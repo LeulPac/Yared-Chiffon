@@ -117,15 +117,17 @@ function groupSubmissions(submissions: AdminSubmission[], visitedIds: Set<string
 }
 
 function getChiffonNewCount(chiffon: AdminChiffon, visitedIds: Set<string>): number {
-  if (!chiffon.submissions) return 0;
-  return chiffon.submissions.filter((s) => !visitedIds.has(s.id)).length;
+  if (!chiffon.submissions || chiffon.submissions.length === 0) return 0;
+  const subGroups = groupSubmissions(chiffon.submissions, visitedIds);
+  return subGroups.filter((g) => g.isNew).length;
 }
 
 function getChiffonLatestNewDate(chiffon: AdminChiffon, visitedIds: Set<string>): number {
-  if (!chiffon.submissions) return 0;
-  const unvisited = chiffon.submissions.filter((s) => !visitedIds.has(s.id));
-  if (unvisited.length === 0) return 0;
-  return Math.max(...unvisited.map((s) => new Date(s.createdAt).getTime()));
+  if (!chiffon.submissions || chiffon.submissions.length === 0) return 0;
+  const subGroups = groupSubmissions(chiffon.submissions, visitedIds);
+  const newGroups = subGroups.filter((g) => g.isNew);
+  if (newGroups.length === 0) return 0;
+  return Math.max(...newGroups.map((g) => new Date(g.createdAt).getTime()));
 }
 
 function getChiffonLatestSubmissionDate(chiffon: AdminChiffon): number {
@@ -336,7 +338,7 @@ export default function SubmissionsPage() {
     const phone = (c.ownerPhone || "").trim();
     const key = `${name}_${phone}`;
 
-    // Live unvisited count for UI badges
+    // Live unvisited count of grouped submissions for UI badges
     const liveChiffonNewCount = getChiffonNewCount(c, visitedIds);
 
     // Initial unvisited count & timestamps for stable position sorting
@@ -699,11 +701,14 @@ export default function SubmissionsPage() {
                                                 {grp.roomNumber}
                                               </td>
                                               <td className="py-2 pl-2 pr-3">
-                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-none">
                                                   {grp.isNew && (
-                                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-500/25 border border-emerald-400/70 px-1.5 py-0.5 rounded animate-pulse shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.4)]">
-                                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                                                      new
+                                                    <span
+                                                      title="New submission"
+                                                      className="relative flex h-2 w-2 shrink-0 items-center justify-center mx-0.5"
+                                                    >
+                                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
                                                     </span>
                                                   )}
                                                   {grp.items.map((item, idx) => (

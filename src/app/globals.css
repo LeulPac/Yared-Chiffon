@@ -83,6 +83,7 @@ html[lang="am"] .font-display {
 
 .font-display {
   font-family: var(--font-display), Georgia, serif;
+  font-variant-numeric: lining-nums;
 }
 
 .animate-fade-up {
