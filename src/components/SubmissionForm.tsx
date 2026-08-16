@@ -154,7 +154,7 @@ export default function SubmissionForm({
         <p className="text-xs text-muted font-medium">
           {locale === "am"
             ? "የፓኬጅ ዋጋ ያስፈልጋል (ያሉህ/ያሏት ብቻ ሙሉ)"
-            : "Package values (fill only the ones you have)"}
+            : "Package prices (fill only the ones you have)"}
         </p>
         {ORDERED_TYPES.map((pt) => (
           <div key={pt} className="flex items-center gap-3">
@@ -166,7 +166,7 @@ export default function SubmissionForm({
               value={packageValues[pt]}
               onChange={(e) => handleValueChange(pt, e.target.value)}
               className="input-dark !rounded-lg !px-3 !py-2 text-sm flex-1"
-              placeholder={`Value…`}
+              placeholder={locale === "am" ? "ዋጋ…" : "Price…"}
             />
           </div>
         ))}

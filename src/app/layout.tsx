@@ -24,6 +24,11 @@ const ethiopic = Noto_Sans_Ethiopic({
 export const metadata: Metadata = {
   title: "Yared Chiffon",
   description: "Ethiopian cultural chiffon — tradition, elegance, you.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png"
+  }
 };
 
 export default function RootLayout({
